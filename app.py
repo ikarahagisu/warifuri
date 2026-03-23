@@ -7,12 +7,14 @@ st.set_page_config(page_title="患者割り振り", layout="wide")
 
 # --- 古いデータのリセット処理 ---
 if "doctors_df" in st.session_state:
-    if "現在の患者数" in st.session_state.doctors_df.columns:
+    # 古い項目名やタイポした項目名が残っている場合に備えてリセット
+    bad_cols = ["現在の患者数", "現患者_数"]
+    if any(col in st.session_state.doctors_df.columns for col in bad_cols):
         for key in st.session_state.keys():
             del st.session_state[key]
         st.rerun()
 
-# --- サイドバー：マニュアルと共有用QR ---
+# --- サイドバー：操作マニュアル ---
 with st.sidebar:
     st.header("📖 マニュアル")
     st.markdown("""
@@ -22,8 +24,7 @@ with st.sidebar:
     4. **保存**: 結果をCSVで保存
     """)
     st.divider()
-    # 共有をスムーズにするための案内（実際のURLをここに入れると便利です）
-    st.caption("スマホのブラウザメニューから『ホーム画面に追加』するとアプリとして使えます。")
+    st.caption("ver 1.4 - タイポ修正済")
 
 st.title("🏥 患者割り振り")
 
@@ -32,7 +33,7 @@ if "doctors_df" not in st.session_state:
     st.session_state.doctors_df = pd.DataFrame([
         {"名前": "医師A", "現患者数": 8, "割振後max患者数": 15, "大変さのmaxスコア": 5},
         {"名前": "医師B", "現患者数": 3, "割振後max患者数": 15, "大変さのmaxスコア": 5},
-        {"名前": "医師C", "現在の患者数": 2, "割振後max患者数": 15, "大変さのmaxスコア": 5},
+        {"名前": "医師C", "現患者数": 2, "割振後max患者数": 15, "大変さのmaxスコア": 5},
         {"名前": "医師D", "現患者数": 1, "割振後max患者数": 15, "大変さのmaxスコア": 3},
     ])
 
@@ -49,7 +50,7 @@ with tab_doc:
     total_new = len(st.session_state.patients_df)
     doc_count = len(st.session_state.doctors_df)
     avg_target = (total_current + total_new) / doc_count if doc_count > 0 else 0
-    st.info(f"💡 ヒント: 全員で割ると1人あたり約 {avg_target:.1f} 名")
+    st.info(f"💡 全員で割ると1人あたり約 {avg_target:.1f} 名")
 
     doc_table_height = (len(st.session_state.doctors_df) + 2) * 36
     edited_doctors_df = st.data_editor(st.session_state.doctors_df, num_rows="dynamic", use_container_width=True, height=doc_table_height, hide_index=True, key="doctor_editor")
@@ -79,12 +80,9 @@ with tab_pat:
     pat_table_height = (len(st.session_state.patients_df) + 2) * 36
     edited_patients_df = st.data_editor(st.session_state.patients_df, num_rows="dynamic", use_container_width=True, height=pat_table_height, hide_index=True, key="patient_editor")
 
-# --- スコア目安は一番下に ---
-with st.expander("ℹ️ スコア目安"):
-    st.write("1:安定 / 3:標準 / 5:最重症")
-
 # --- 3. 割り振り実行 ---
-if st.button("このデータで患者を割り振る", type="primary", use_container_width=True): # ボタンを横いっぱいに広げる
+st.divider()
+if st.button("このデータで患者を割り振る", type="primary", use_container_width=True):
     doctors = edited_doctors_df.to_dict('records')
     patients = edited_patients_df.to_dict('records')
     allocations = {doc["名前"]: [] for doc in doctors}
@@ -108,7 +106,8 @@ if st.button("このデータで患者を割り振る", type="primary", use_cont
             unallocated.append(p)
             continue
         random.shuffle(eligible_docs)
-        best_doc = min(eligible_docs, key=lambda d: (d["新規追加スコア合計"], d["現患者_数"])) # 前回のタイポ修正
+        # ここを「現患者数」に修正しました！
+        best_doc = min(eligible_docs, key=lambda d: (d["新規追加スコア合計"], d["現患者数"])) 
         best_doc["現患者数"] += 1
         best_doc["新規追加スコア合計"] += p["大変さスコア"]
         allocations[best_doc["名前"]].append(p)
@@ -120,7 +119,6 @@ if st.button("このデータで患者を割り振る", type="primary", use_cont
     else:
         st.warning(f"⚠️ {len(unallocated)} 名 未割り当て")
     
-    # 結果もタブに分けて見やすく
     res_tab1, res_tab2 = st.tabs(["📊 医師合計", "📋 個別リスト"])
     
     with res_tab1:
@@ -151,3 +149,7 @@ if st.button("このデータで患者を割り振る", type="primary", use_cont
         
         csv = df_final_patients.to_csv(index=False).encode('utf-8-sig')
         st.download_button(label="📥 CSV保存", data=csv, file_name='result.csv', mime='text/csv', use_container_width=True)
+
+# 目安は邪魔にならないよう一番下に
+with st.expander("ℹ️ スコア目安"):
+    st.write("1:安定 / 3:標準 / 5:最重症")
