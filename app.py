@@ -7,8 +7,7 @@ st.set_page_config(page_title="患者割り振りシミュレーター", layout=
 st.title("🏥 患者割り振りシミュレーター")
 st.write("各医師の現在の受け持ち人数と制限を考慮しつつ、新規患者の「大変さ」がなるべく均等になるように割り振ります。表は直接クリックして編集・追加・削除（Deleteキー）が可能です。")
 
-# --- 1. 初期データの設定（セッションステートで保持） ---
-# 医師の初期データから「現在の負担スコア」を削除
+# --- 1. 初期データの設定 ---
 if "doctors_df" not in st.session_state:
     st.session_state.doctors_df = pd.DataFrame([
         {"名前": "医師A", "現在の患者数": 8, "上限患者数": 25, "許容最大スコア": 5},
@@ -22,26 +21,38 @@ if "patients_df" not in st.session_state:
         {"名前": f"患者名_{i+1:02d}", "大変さスコア": random.randint(1, 5)} for i in range(40)
     ])
 
-# --- 2. 画面UIの作成（直接編集可能な表） ---
+# --- 2. 画面UIの作成 ---
 col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("👨‍⚕️ 割り振り前の医師ステータス")
     st.write("※直接編集、行の追加・削除が可能です")
+    
+    # データ件数から表の高さを自動計算 (1行あたり約36ピクセルで計算)
+    doc_table_height = (len(st.session_state.doctors_df) + 2) * 36
+    
     edited_doctors_df = st.data_editor(
         st.session_state.doctors_df, 
         num_rows="dynamic", 
         use_container_width=True,
+        height=doc_table_height, # 計算した高さを指定して縦スクロールを消す
+        hide_index=True,         # 左端の不要な数字(0,1,2...)を消して横幅を節約
         key="doctor_editor"
     )
 
 with col2:
     st.subheader("🤒 新規割り振り患者リスト")
     st.write("※直接編集、行の追加・削除が可能です")
+    
+    # データ件数から表の高さを自動計算
+    pat_table_height = (len(st.session_state.patients_df) + 2) * 36
+    
     edited_patients_df = st.data_editor(
         st.session_state.patients_df, 
         num_rows="dynamic", 
         use_container_width=True,
+        height=pat_table_height, # 40名分でも縦に全表示されるように高さを指定
+        hide_index=True,         # 左端の不要な数字を消して横幅を節約
         key="patient_editor"
     )
 
@@ -55,18 +66,15 @@ if st.button("このデータで患者を割り振る", type="primary"):
     allocations = {doc["名前"]: [] for doc in doctors}
     unallocated = []
 
-    # 割り振り時のバランスを取るための内部カウンターを各医師にセット
     for doc in doctors:
         doc["新規追加スコア合計"] = 0
 
-    # ① 患者を大変さスコアが高い順（重症順）に並び替える
     sorted_patients = sorted(patients, key=lambda x: x["大変さスコア"], reverse=True)
 
     for p in sorted_patients:
         if pd.isna(p["名前"]) or pd.isna(p["大変さスコア"]):
             continue
 
-        # ② 条件を満たす医師を絞り込む
         eligible_docs = [
             d for d in doctors 
             if d["現在の患者数"] < d["上限患者数"] and p["大変さスコア"] <= d["許容最大スコア"]
@@ -76,12 +84,8 @@ if st.button("このデータで患者を割り振る", type="primary"):
             unallocated.append(p)
             continue
 
-        # ③ 最も余裕のある医師を選ぶ
-        # 優先順位1: 今回割り当てられた「新規追加スコア合計」が低い
-        # 優先順位2: 現在の患者数が少ない
         best_doc = min(eligible_docs, key=lambda d: (d["新規追加スコア合計"], d["現在の患者数"]))
 
-        # ④ 割り当てを実行してステータス更新
         best_doc["現在の患者数"] += 1
         best_doc["新規追加スコア合計"] += p["大変さスコア"]
         allocations[best_doc["名前"]].append(p)
@@ -94,12 +98,10 @@ if st.button("このデータで患者を割り振る", type="primary"):
     with res_col1:
         st.subheader("📊 割り振り後の医師ステータス")
         df_docs_final = pd.DataFrame(doctors)
-        # 割り振り前との差分を計算
         df_docs_final["追加患者数"] = df_docs_final["現在の患者数"] - edited_doctors_df["現在の患者数"]
-        
-        # 表示順序とカラムを整える
         display_df = df_docs_final[["名前", "現在の患者数", "追加患者数", "新規追加スコア合計", "上限患者数"]]
-        st.dataframe(display_df, use_container_width=True)
+        # 結果の表も不要な左端の数字を消す
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     with res_col2:
         st.subheader("📋 各医師の新規受け入れリスト")
