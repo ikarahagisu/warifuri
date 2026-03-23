@@ -27,7 +27,7 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader("👨‍⚕️ 割り振り前の医師ステータス")
     
-    # 全体に均等に割り振った場合の「予測総患者数」を計算
+    # 全体に均等に割り振った場合の「予測総患者数」を計算してヒントとして表示
     total_current = st.session_state.doctors_df["現在の患者数"].sum()
     total_new = len(st.session_state.patients_df)
     doc_count = len(st.session_state.doctors_df)
@@ -35,27 +35,17 @@ with col1:
 
     st.info(f"💡 **上限設定のヒント:** 現在の全患者({total_current}名)＋新規({total_new}名)を{doc_count}名で均等に割ると、**1人あたり約 {avg_target:.1f} 名** になります。")
 
-    # 表示用データフレームに計算結果のカラムを追加
-    display_docs_df = st.session_state.doctors_df.copy()
-    display_docs_df["[参考]予測総数(均等時)"] = round(avg_target, 1)
+    # 表をシンプルに表示
+    doc_table_height = (len(st.session_state.doctors_df) + 2) * 36
     
-    doc_table_height = (len(display_docs_df) + 2) * 36
-    
-    edited_display_docs = st.data_editor(
-        display_docs_df, 
+    edited_doctors_df = st.data_editor(
+        st.session_state.doctors_df, 
         num_rows="dynamic", 
         use_container_width=True,
         height=doc_table_height,
         hide_index=True,
-        disabled=["[参考]予測総数(均等時)"], # この列は自動計算のため編集不可にする
         key="doctor_editor"
     )
-    
-    # ユーザーが編集したデータから参考カラムを取り除き、次回計算用に保存
-    if "[参考]予測総数(均等時)" in edited_display_docs.columns:
-        edited_doctors_df = edited_display_docs.drop(columns=["[参考]予測総数(均等時)"])
-    else:
-        edited_doctors_df = edited_display_docs
 
 with col2:
     st.subheader("🤒 新規割り振り患者リスト")
