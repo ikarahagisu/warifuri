@@ -4,13 +4,12 @@ import random
 
 st.set_page_config(page_title="患者割り振りシミュレーター", layout="wide")
 
-# --- 【追加】古いデータが残っている場合に自動でリセットする処理 ---
+# --- 古いデータが残っている場合に自動でリセットする処理 ---
 if "doctors_df" in st.session_state:
-    # もし古い項目名（現在の患者数）が残っていたら、一度消去する
     if "現在の患者数" in st.session_state.doctors_df.columns:
         for key in st.session_state.keys():
             del st.session_state[key]
-        st.rerun() # 画面を再読み込みして初期化
+        st.rerun()
 
 # --- サイドバー：操作マニュアル ---
 with st.sidebar:
@@ -37,7 +36,7 @@ with st.sidebar:
     * **CSV保存**: 結果をExcelで開ける形式でダウンロードできます。
     """)
     st.divider()
-    st.caption("ver 1.2 - エラー自動回避版")
+    st.caption("ver 1.3 - 表示最適化版")
 
 st.title("🏥 患者割り振りシミュレーター")
 st.write("各医師の現在の受け持ち人数と制限を考慮しつつ、新規患者の「大変さ」がなるべく均等になるように割り振ります。")
@@ -154,7 +153,9 @@ if st.button("このデータで患者を割り振る", type="primary"):
         df_docs_final = pd.DataFrame(doctors)
         df_docs_final.rename(columns={"現患者数": "割振後総患者数"}, inplace=True)
         df_docs_final["追加患者数"] = df_docs_final["割振後総患者数"] - edited_doctors_df["現患者数"]
-        display_df = df_docs_final[["名前", "割振後総患者数", "追加患者数", "新規追加スコア合計", "割振後max患者数"]]
+        
+        # --- 変更ポイント：割振後max患者数を表示用カラムから除外 ---
+        display_df = df_docs_final[["名前", "割振後総患者数", "追加患者数", "新規追加スコア合計"]]
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     with res_col2:
