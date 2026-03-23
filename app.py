@@ -28,9 +28,10 @@ if "doctors_df" not in st.session_state:
         {"名前": "医師D", "現在の患者数": 1, "割り振り後max患者数": 15, "大変さのmaxスコア": 3},
     ])
 
+# 初期患者データに「現在の主治医」を追加
 if "patients_df" not in st.session_state:
     st.session_state.patients_df = pd.DataFrame([
-        {"名前": f"患者名_{i+1:02d}", "大変さスコア": random.randint(1, 5)} for i in range(40)
+        {"名前": f"患者名_{i+1:02d}", "現在の主治医": "未設定", "大変さスコア": random.randint(1, 5)} for i in range(40)
     ])
 
 # --- 2. 画面UIの作成 ---
@@ -70,17 +71,18 @@ with col2:
                     uploaded_file.seek(0)
                     df_uploaded = pd.read_csv(uploaded_file, encoding='shift-jis')
                 
-                if "名前" in df_uploaded.columns and "大変さスコア" in df_uploaded.columns:
-                    st.session_state.patients_df = df_uploaded[["名前", "大変さスコア"]]
+                # チェック項目に「現在の主治医」を追加
+                required_cols = ["名前", "現在の主治医", "大変さスコア"]
+                if all(col in df_uploaded.columns for col in required_cols):
+                    st.session_state.patients_df = df_uploaded[required_cols]
                     
                     if "patient_editor" in st.session_state:
                         del st.session_state["patient_editor"]
                     
                     st.session_state["last_uploaded_file_id"] = uploaded_file.file_id
-                    
                     st.success("CSVを読み込みました！下の表に反映されています。")
                 else:
-                    st.error("エラー：CSVの1行目に「名前」と「大変さスコア」という項目名が必要です。")
+                    st.error("エラー：CSVの1行目に「名前」「現在の主治医」「大変さスコア」という項目名が必要です。")
             except Exception as e:
                 st.error(f"読み込みエラー: {e}")
 
@@ -106,12 +108,14 @@ if st.button("このデータで患者を割り振る", type="primary"):
     allocations = {doc["名前"]: [] for doc in doctors}
     unallocated = []
     
+    # 有効な患者の抽出
     valid_patients = [p for p in patients if not (pd.isna(p.get("名前")) or pd.isna(p.get("大変さスコア")))]
     valid_patients_count = len(valid_patients)
 
     for doc in doctors:
         doc["新規追加スコア合計"] = 0
 
+    # ランダム性を入れるためのシャッフル
     patients_for_allocation = list(valid_patients)
     random.shuffle(patients_for_allocation) 
     
@@ -168,23 +172,26 @@ if st.button("このデータで患者を割り振る", type="primary"):
             unallocated_names = [p['名前'] for p in unallocated]
             st.write(f"{', '.join(unallocated_names)}")
 
-    # --- 5. 元の順番での全体照合リスト ---
+    # --- 5. 個別患者の割り振り結果（現在の主治医列を保持） ---
     st.divider()
     st.subheader("🔍 個別患者の割り振り結果")
     
-    patient_to_doc = {}
+    # 名前をキーにして、割り振り先の医師名を格納する辞書
+    patient_to_assigned_doc = {}
     for doc_name, assigned_list in allocations.items():
         for p in assigned_list:
-            patient_to_doc[p['名前']] = doc_name
+            patient_to_assigned_doc[p['名前']] = doc_name
     for p in unallocated:
-        patient_to_doc[p['名前']] = "⚠️ 未割り当て"
+        patient_to_assigned_doc[p['名前']] = "⚠️ 未割り当て"
 
+    # valid_patientsをループして、現在の主治医を残したまま結果表を作成
     final_patient_list = []
     for p in valid_patients:
         final_patient_list.append({
             "患者名": p["名前"],
+            "現在の主治医": p.get("現在の主治医", "未設定"), # 情報を保持
             "大変さスコア": p["大変さスコア"],
-            "担当医": patient_to_doc.get(p["名前"], "エラー")
+            "新担当医": patient_to_assigned_doc.get(p["名前"], "エラー")
         })
     
     df_final_patients = pd.DataFrame(final_patient_list)
