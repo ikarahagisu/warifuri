@@ -32,20 +32,18 @@ with st.sidebar:
     中央のボタンを押すと、新規患者のスコア合計が均等になるよう自動計算します。
     """)
     st.divider()
-    st.caption("ver 1.7 - 文言微修正版")
+    st.caption("ver 1.8 - 常時表示レイアウト版")
 
 st.title("🏥 患者割り振りシミュレーター")
 st.write("各医師の「現患者数」と「大変さの合計」がなるべく均等になるように割り振ります。")
 
-# --- 3段階スコアの目安 ---
-with st.expander("ℹ️ 「大変さスコア」1〜3の目安（クリックで開閉）"):
-    st.markdown("""
-    判断に迷う時間を減らすため、シンプルな3段階に設定しています。
-
-    * **スコア 1（軽度）** : 状態安定。特別な処置不要、または退院間近。
-    * **スコア 2（中等度）** : 標準的な入院患者。定時の点滴・検査、一般的なムンテラあり。
-    * **スコア 3（高度）** : 頻回な観察、複雑な処置、または長時間の家族対応が必要な重症。
-    """)
+# --- 3段階スコアの目安（折りたたみを廃止し、常時表示の枠に変更） ---
+st.info("""
+**ℹ️ 「大変さスコア」1〜3の目安** （シンプルな3段階評価）
+* **スコア 1（軽度）** : 状態安定。特別な処置不要、または退院間近。
+* **スコア 2（中等度）** : 標準的な入院患者。定時の点滴・検査、一般的なムンテラあり。
+* **スコア 3（高度）** : 頻回な観察、複雑な処置、または長時間の家族対応が必要な重症。
+""")
 
 # --- 1. 初期データの設定 ---
 if "doctors_df" not in st.session_state:
@@ -71,8 +69,7 @@ with col1:
     doc_count = len(st.session_state.doctors_df)
     avg_target = (total_current + total_new) / doc_count if doc_count > 0 else 0
     
-    # --- 文言を変更しました ---
-    st.info(f"💡 ヒント: 現受け持ち患者({total_current}名)＋新規({total_new}名)を{doc_count}名で割ると、1人あたり約 {avg_target:.1f} 名です。")
+    st.success(f"💡 ヒント: 現受け持ち患者({total_current}名)＋新規({total_new}名)を{doc_count}名で割ると、1人あたり約 **{avg_target:.1f} 名** です。")
 
     doc_table_height = (len(st.session_state.doctors_df) + 2) * 36
     edited_doctors_df = st.data_editor(st.session_state.doctors_df, num_rows="dynamic", use_container_width=True, height=doc_table_height, hide_index=True, key="doctor_editor")
