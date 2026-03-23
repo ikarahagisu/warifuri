@@ -102,7 +102,7 @@ if st.button("このデータで患者を割り振る", type="primary"):
     allocations = {doc["名前"]: [] for doc in doctors}
     unallocated = []
     
-    # 割り振り対象となる有効な患者をカウント（空の行を除外）
+    # 割り振り対象となる有効な患者をカウントし、元の順番を保存しておく
     valid_patients = [p for p in patients if not (pd.isna(p.get("名前")) or pd.isna(p.get("大変さスコア")))]
     valid_patients_count = len(valid_patients)
 
@@ -128,8 +128,6 @@ if st.button("このデータで患者を割り振る", type="primary"):
         allocations[best_doc["名前"]].append(p)
     
     # --- 4. 結果の表示 ---
-    
-    # もれなく割り振られたかのチェックとメッセージ表示
     allocated_count = valid_patients_count - len(unallocated)
     
     if len(unallocated) == 0:
@@ -151,19 +149,10 @@ if st.button("このデータで患者を割り振る", type="primary"):
     with res_col2:
         st.subheader("📋 各医師の新規受け入れリスト")
         
-        download_data = []
-        
         for doc_name, assigned in allocations.items():
             if assigned:
                 patient_texts = [f"{p['名前']}(ｽｺｱ{p['大変さスコア']})" for p in assigned]
                 st.write(f"**{doc_name}** ({len(assigned)}名): {', '.join(patient_texts)}")
-                
-                for p in assigned:
-                    download_data.append({
-                        "担当医": doc_name,
-                        "患者名": p['名前'],
-                        "大変さスコア": p['大変さスコア']
-                    })
             else:
                 st.write(f"**{doc_name}**: なし")
         
@@ -171,22 +160,41 @@ if st.button("このデータで患者を割り振る", type="primary"):
             st.error(f"⚠️ 未割り当ての患者リスト ({len(unallocated)} 名)")
             unallocated_names = [p['名前'] for p in unallocated]
             st.write(f"{', '.join(unallocated_names)}")
-            
-            for p in unallocated:
-                download_data.append({
-                    "担当医": "未割り当て",
-                    "患者名": p['名前'],
-                    "大変さスコア": p['大変さスコア']
-                })
 
-        if download_data:
-            df_download = pd.DataFrame(download_data)
-            csv = df_download.to_csv(index=False).encode('utf-8-sig')
-            
-            st.write("")
-            st.download_button(
-                label="📥 割り振り結果をCSVでダウンロード",
-                data=csv,
-                file_name='allocation_result.csv',
-                mime='text/csv',
-            )
+    # --- 5. 新機能：元の順番での全体照合リスト ---
+    st.divider()
+    st.subheader("🔍 個別患者の割り振り結果（入力順での突合用）")
+    
+    # 患者名から担当医を引ける辞書を作成
+    patient_to_doc = {}
+    for doc_name, assigned_list in allocations.items():
+        for p in assigned_list:
+            patient_to_doc[p['名前']] = doc_name
+    for p in unallocated:
+        patient_to_doc[p['名前']] = "⚠️ 未割り当て"
+
+    # 入力時（valid_patients）の順番のままリストを作成
+    final_patient_list = []
+    for p in valid_patients:
+        final_patient_list.append({
+            "患者名": p["名前"],
+            "大変さスコア": p["大変さスコア"],
+            "担当医": patient_to_doc.get(p["名前"], "エラー")
+        })
+    
+    df_final_patients = pd.DataFrame(final_patient_list)
+    
+    # ダウンロード用データもこの「入力順の表」をベースにする
+    csv = df_final_patients.to_csv(index=False).encode('utf-8-sig')
+    
+    col_table, col_btn = st.columns([3, 1])
+    with col_table:
+        st.dataframe(df_final_patients, use_container_width=True, hide_index=True)
+    with col_btn:
+        st.download_button(
+            label="📥 この表をCSVでダウンロード",
+            data=csv,
+            file_name='allocation_result_ordered.csv',
+            mime='text/csv',
+            use_container_width=True
+        )
