@@ -7,7 +7,6 @@ st.set_page_config(page_title="患者割り振りシミュレーター", layout=
 st.title("🏥 患者割り振りシミュレーター")
 st.write("各医師の現在の受け持ち人数と制限を考慮しつつ、新規患者の「大変さ」がなるべく均等になるように割り振ります。表は直接クリックして編集・追加・削除（Deleteキー）が可能です。")
 
-# --- 新機能：スコアの目安説明欄（折りたたみ式） ---
 with st.expander("ℹ️ 「大変さスコア」1〜5の目安について（クリックで開閉）"):
     st.markdown("""
     患者さんの受け持ち負担度を **1（最も軽い）〜 5（最も重い）の5段階** で評価します。
@@ -40,6 +39,7 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader("👨‍⚕️ 割り振り前の医師ステータス")
     
+    # 編集後のデータではなく、ベースデータを使ってヒントを計算
     total_current = st.session_state.doctors_df["現在の患者数"].sum()
     total_new = len(st.session_state.patients_df)
     doc_count = len(st.session_state.doctors_df)
@@ -48,13 +48,15 @@ with col1:
     st.info(f"💡 **上限設定のヒント:** 現在の全患者({total_current}名)＋新規({total_new}名)を{doc_count}名で均等に割ると、**1人あたり約 {avg_target:.1f} 名** になります。")
 
     doc_table_height = (len(st.session_state.doctors_df) + 2) * 36
+    
+    # ここで編集されたデータは edited_doctors_df に入り、画面上の見た目も保持されます
     edited_doctors_df = st.data_editor(
         st.session_state.doctors_df, 
         num_rows="dynamic", 
         use_container_width=True,
         height=doc_table_height,
         hide_index=True,
-        key="doctor_editor"
+        key="doctor_editor" # このキーによってStreamlitが裏側で入力を記憶します
     )
 
 with col2:
@@ -70,7 +72,13 @@ with col2:
                 df_uploaded = pd.read_csv(uploaded_file, encoding='shift-jis')
             
             if "名前" in df_uploaded.columns and "大変さスコア" in df_uploaded.columns:
+                # 新しいCSVデータをベースデータとして上書き
                 st.session_state.patients_df = df_uploaded[["名前", "大変さスコア"]]
+                
+                # 新しいデータを読み込んだ時は、古い手入力の記憶をリセットする
+                if "patient_editor" in st.session_state:
+                    del st.session_state["patient_editor"]
+                    
                 st.success("CSVを読み込みました！下の表に反映されています。")
             else:
                 st.error("エラー：CSVの1行目に「名前」と「大変さスコア」という項目名が必要です。")
@@ -88,9 +96,6 @@ with col2:
         hide_index=True,
         key="patient_editor"
     )
-
-st.session_state.doctors_df = edited_doctors_df
-st.session_state.patients_df = edited_patients_df
 
 # --- 3. 割り振りアルゴリズム実行 ---
 st.divider()
