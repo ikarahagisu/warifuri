@@ -161,11 +161,11 @@ if st.button("このデータで患者を割り振る", type="primary"):
             unallocated_names = [p['名前'] for p in unallocated]
             st.write(f"{', '.join(unallocated_names)}")
 
-    # --- 5. 新機能：元の順番での全体照合リスト ---
+    # --- 5. 元の順番での全体照合リスト ---
     st.divider()
-    st.subheader("🔍 個別患者の割り振り結果（入力順での突合用）")
+    # テキストを修正しました
+    st.subheader("🔍 個別患者の割り振り結果")
     
-    # 患者名から担当医を引ける辞書を作成
     patient_to_doc = {}
     for doc_name, assigned_list in allocations.items():
         for p in assigned_list:
@@ -173,7 +173,6 @@ if st.button("このデータで患者を割り振る", type="primary"):
     for p in unallocated:
         patient_to_doc[p['名前']] = "⚠️ 未割り当て"
 
-    # 入力時（valid_patients）の順番のままリストを作成
     final_patient_list = []
     for p in valid_patients:
         final_patient_list.append({
@@ -183,13 +182,19 @@ if st.button("このデータで患者を割り振る", type="primary"):
         })
     
     df_final_patients = pd.DataFrame(final_patient_list)
-    
-    # ダウンロード用データもこの「入力順の表」をベースにする
     csv = df_final_patients.to_csv(index=False).encode('utf-8-sig')
+    
+    # 割り振られた患者の件数に合わせて表の高さを自動計算し、全行表示させる
+    final_table_height = (len(df_final_patients) + 2) * 36
     
     col_table, col_btn = st.columns([3, 1])
     with col_table:
-        st.dataframe(df_final_patients, use_container_width=True, hide_index=True)
+        st.dataframe(
+            df_final_patients, 
+            use_container_width=True, 
+            hide_index=True, 
+            height=final_table_height # ここで高さを指定してスクロールを消去
+        )
     with col_btn:
         st.download_button(
             label="📥 この表をCSVでダウンロード",
