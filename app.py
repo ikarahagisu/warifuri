@@ -39,7 +39,6 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader("👨‍⚕️ 割り振り前の医師ステータス")
     
-    # 編集後のデータではなく、ベースデータを使ってヒントを計算
     total_current = st.session_state.doctors_df["現在の患者数"].sum()
     total_new = len(st.session_state.patients_df)
     doc_count = len(st.session_state.doctors_df)
@@ -48,15 +47,13 @@ with col1:
     st.info(f"💡 **上限設定のヒント:** 現在の全患者({total_current}名)＋新規({total_new}名)を{doc_count}名で均等に割ると、**1人あたり約 {avg_target:.1f} 名** になります。")
 
     doc_table_height = (len(st.session_state.doctors_df) + 2) * 36
-    
-    # ここで編集されたデータは edited_doctors_df に入り、画面上の見た目も保持されます
     edited_doctors_df = st.data_editor(
         st.session_state.doctors_df, 
         num_rows="dynamic", 
         use_container_width=True,
         height=doc_table_height,
         hide_index=True,
-        key="doctor_editor" # このキーによってStreamlitが裏側で入力を記憶します
+        key="doctor_editor"
     )
 
 with col2:
@@ -72,10 +69,8 @@ with col2:
                 df_uploaded = pd.read_csv(uploaded_file, encoding='shift-jis')
             
             if "名前" in df_uploaded.columns and "大変さスコア" in df_uploaded.columns:
-                # 新しいCSVデータをベースデータとして上書き
                 st.session_state.patients_df = df_uploaded[["名前", "大変さスコア"]]
                 
-                # 新しいデータを読み込んだ時は、古い手入力の記憶をリセットする
                 if "patient_editor" in st.session_state:
                     del st.session_state["patient_editor"]
                     
@@ -106,16 +101,17 @@ if st.button("このデータで患者を割り振る", type="primary"):
     
     allocations = {doc["名前"]: [] for doc in doctors}
     unallocated = []
+    
+    # 割り振り対象となる有効な患者をカウント（空の行を除外）
+    valid_patients = [p for p in patients if not (pd.isna(p.get("名前")) or pd.isna(p.get("大変さスコア")))]
+    valid_patients_count = len(valid_patients)
 
     for doc in doctors:
         doc["新規追加スコア合計"] = 0
 
-    sorted_patients = sorted(patients, key=lambda x: x["大変さスコア"], reverse=True)
+    sorted_patients = sorted(valid_patients, key=lambda x: x["大変さスコア"], reverse=True)
 
     for p in sorted_patients:
-        if pd.isna(p.get("名前")) or pd.isna(p.get("大変さスコア")):
-            continue
-
         eligible_docs = [
             d for d in doctors 
             if d["現在の患者数"] < d["上限患者数"] and p["大変さスコア"] <= d["許容最大スコア"]
@@ -132,7 +128,14 @@ if st.button("このデータで患者を割り振る", type="primary"):
         allocations[best_doc["名前"]].append(p)
     
     # --- 4. 結果の表示 ---
-    st.success("割り振りが完了しました！")
+    
+    # もれなく割り振られたかのチェックとメッセージ表示
+    allocated_count = valid_patients_count - len(unallocated)
+    
+    if len(unallocated) == 0:
+        st.success(f"🎉 完璧です！ 全 {valid_patients_count} 名の患者がもれなく割り振られました。")
+    else:
+        st.warning(f"⚠️ 全 {valid_patients_count} 名のうち、{allocated_count}名が割り振られましたが、条件に合わない {len(unallocated)} 名が未割り当てとなっています。")
     
     res_col1, res_col2 = st.columns(2)
     
@@ -165,9 +168,9 @@ if st.button("このデータで患者を割り振る", type="primary"):
                 st.write(f"**{doc_name}**: なし")
         
         if unallocated:
-            st.error(f"⚠️ 割り当てられなかった患者が {len(unallocated)} 名います。上限設定を見直してください。")
+            st.error(f"⚠️ 未割り当ての患者リスト ({len(unallocated)} 名)")
             unallocated_names = [p['名前'] for p in unallocated]
-            st.write(f"未割り当て: {', '.join(unallocated_names)}")
+            st.write(f"{', '.join(unallocated_names)}")
             
             for p in unallocated:
                 download_data.append({
