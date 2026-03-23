@@ -60,25 +60,32 @@ with col2:
     st.subheader("🤒 新規割り振り患者リスト")
     
     uploaded_file = st.file_uploader("電子カルテ等から患者リスト(CSV)を読み込む", type=["csv"])
+    
+    # --- 修正ポイント：同じファイルで何度もリセットされるのを防ぐ ---
     if uploaded_file is not None:
-        try:
+        # アップロードされたファイルのIDをチェックし、新しいファイルが来た時だけ読み込む
+        if st.session_state.get("last_uploaded_file_id") != uploaded_file.file_id:
             try:
-                df_uploaded = pd.read_csv(uploaded_file, encoding='utf-8')
-            except UnicodeDecodeError:
-                uploaded_file.seek(0)
-                df_uploaded = pd.read_csv(uploaded_file, encoding='shift-jis')
-            
-            if "名前" in df_uploaded.columns and "大変さスコア" in df_uploaded.columns:
-                st.session_state.patients_df = df_uploaded[["名前", "大変さスコア"]]
+                try:
+                    df_uploaded = pd.read_csv(uploaded_file, encoding='utf-8')
+                except UnicodeDecodeError:
+                    uploaded_file.seek(0)
+                    df_uploaded = pd.read_csv(uploaded_file, encoding='shift-jis')
                 
-                if "patient_editor" in st.session_state:
-                    del st.session_state["patient_editor"]
+                if "名前" in df_uploaded.columns and "大変さスコア" in df_uploaded.columns:
+                    st.session_state.patients_df = df_uploaded[["名前", "大変さスコア"]]
                     
-                st.success("CSVを読み込みました！下の表に反映されています。")
-            else:
-                st.error("エラー：CSVの1行目に「名前」と「大変さスコア」という項目名が必要です。")
-        except Exception as e:
-            st.error(f"読み込みエラー: {e}")
+                    if "patient_editor" in st.session_state:
+                        del st.session_state["patient_editor"]
+                    
+                    # 読み込んだファイルのIDを記録する
+                    st.session_state["last_uploaded_file_id"] = uploaded_file.file_id
+                    
+                    st.success("CSVを読み込みました！下の表に反映されています。")
+                else:
+                    st.error("エラー：CSVの1行目に「名前」と「大変さスコア」という項目名が必要です。")
+            except Exception as e:
+                st.error(f"読み込みエラー: {e}")
 
     st.write("※直接編集、行の追加・削除が可能です")
     pat_table_height = (len(st.session_state.patients_df) + 2) * 36
@@ -102,7 +109,6 @@ if st.button("このデータで患者を割り振る", type="primary"):
     allocations = {doc["名前"]: [] for doc in doctors}
     unallocated = []
     
-    # 割り振り対象となる有効な患者をカウントし、元の順番を保存しておく
     valid_patients = [p for p in patients if not (pd.isna(p.get("名前")) or pd.isna(p.get("大変さスコア")))]
     valid_patients_count = len(valid_patients)
 
@@ -163,7 +169,6 @@ if st.button("このデータで患者を割り振る", type="primary"):
 
     # --- 5. 元の順番での全体照合リスト ---
     st.divider()
-    # テキストを修正しました
     st.subheader("🔍 個別患者の割り振り結果")
     
     patient_to_doc = {}
@@ -184,7 +189,6 @@ if st.button("このデータで患者を割り振る", type="primary"):
     df_final_patients = pd.DataFrame(final_patient_list)
     csv = df_final_patients.to_csv(index=False).encode('utf-8-sig')
     
-    # 割り振られた患者の件数に合わせて表の高さを自動計算し、全行表示させる
     final_table_height = (len(df_final_patients) + 2) * 36
     
     col_table, col_btn = st.columns([3, 1])
@@ -193,7 +197,7 @@ if st.button("このデータで患者を割り振る", type="primary"):
             df_final_patients, 
             use_container_width=True, 
             hide_index=True, 
-            height=final_table_height # ここで高さを指定してスクロールを消去
+            height=final_table_height
         )
     with col_btn:
         st.download_button(
