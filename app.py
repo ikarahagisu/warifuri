@@ -7,6 +7,19 @@ st.set_page_config(page_title="患者割り振りシミュレーター", layout=
 st.title("🏥 患者割り振りシミュレーター")
 st.write("各医師の現在の受け持ち人数と制限を考慮しつつ、新規患者の「大変さ」がなるべく均等になるように割り振ります。表は直接クリックして編集・追加・削除（Deleteキー）が可能です。")
 
+# --- 新機能：スコアの目安説明欄（折りたたみ式） ---
+with st.expander("ℹ️ 「大変さスコア」1〜5の目安について（クリックで開閉）"):
+    st.markdown("""
+    患者さんの受け持ち負担度を **1（最も軽い）〜 5（最も重い）の5段階** で評価します。
+    ※以下の基準は目安です。実際の病棟や診療科の実情に合わせて運用してください。
+
+    * **スコア 1（軽度）** : 状態が安定している。特別な処置が不要、または退院間近（ADL自立など）。
+    * **スコア 2（やや注意）** : 1日1〜2回の定期的な観察や、軽度の処置・投薬管理が必要。
+    * **スコア 3（中等度）** : 標準的な入院患者。定時の点滴や検査、一般的な病状説明（ムンテラ）がある。
+    * **スコア 4（重症・手間）** : 頻回なバイタルチェックや複雑な処置が必要。または急変のリスクがやや高い。
+    * **スコア 5（最重症）** : つきっきりの対応、長時間の家族ムンテラ（重い病状説明など）、または非常に高度な全身管理が必要。
+    """)
+
 # --- 1. 初期データの設定 ---
 if "doctors_df" not in st.session_state:
     st.session_state.doctors_df = pd.DataFrame([
@@ -47,18 +60,15 @@ with col1:
 with col2:
     st.subheader("🤒 新規割り振り患者リスト")
     
-    # --- 新機能①：CSVアップロード ---
     uploaded_file = st.file_uploader("電子カルテ等から患者リスト(CSV)を読み込む", type=["csv"])
     if uploaded_file is not None:
         try:
-            # 日本語のExcel(Shift-JIS)と標準のUTF-8の両方に対応
             try:
                 df_uploaded = pd.read_csv(uploaded_file, encoding='utf-8')
             except UnicodeDecodeError:
                 uploaded_file.seek(0)
                 df_uploaded = pd.read_csv(uploaded_file, encoding='shift-jis')
             
-            # 必要なカラム名が存在するかチェック
             if "名前" in df_uploaded.columns and "大変さスコア" in df_uploaded.columns:
                 st.session_state.patients_df = df_uploaded[["名前", "大変さスコア"]]
                 st.success("CSVを読み込みました！下の表に反映されています。")
@@ -79,7 +89,6 @@ with col2:
         key="patient_editor"
     )
 
-# 編集内容をセッションステートに更新
 st.session_state.doctors_df = edited_doctors_df
 st.session_state.patients_df = edited_patients_df
 
@@ -134,7 +143,6 @@ if st.button("このデータで患者を割り振る", type="primary"):
     with res_col2:
         st.subheader("📋 各医師の新規受け入れリスト")
         
-        # --- 新機能②：ダウンロード用データの作成 ---
         download_data = []
         
         for doc_name, assigned in allocations.items():
@@ -142,7 +150,6 @@ if st.button("このデータで患者を割り振る", type="primary"):
                 patient_texts = [f"{p['名前']}(ｽｺｱ{p['大変さスコア']})" for p in assigned]
                 st.write(f"**{doc_name}** ({len(assigned)}名): {', '.join(patient_texts)}")
                 
-                # ダウンロード用のリストに整形して追加
                 for p in assigned:
                     download_data.append({
                         "担当医": doc_name,
@@ -164,13 +171,11 @@ if st.button("このデータで患者を割り振る", type="primary"):
                     "大変さスコア": p['大変さスコア']
                 })
 
-        # --- CSVダウンロードボタンの設置 ---
         if download_data:
             df_download = pd.DataFrame(download_data)
-            # utf-8-sigにすることで、日本のWindows(Excel)で開いた時の文字化けを防ぐ
             csv = df_download.to_csv(index=False).encode('utf-8-sig')
             
-            st.write("") # 少し隙間を空ける
+            st.write("")
             st.download_button(
                 label="📥 割り振り結果をCSVでダウンロード",
                 data=csv,
