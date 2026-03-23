@@ -4,6 +4,14 @@ import random
 
 st.set_page_config(page_title="患者割り振りシミュレーター", layout="wide")
 
+# --- 【追加】古いデータが残っている場合に自動でリセットする処理 ---
+if "doctors_df" in st.session_state:
+    # もし古い項目名（現在の患者数）が残っていたら、一度消去する
+    if "現在の患者数" in st.session_state.doctors_df.columns:
+        for key in st.session_state.keys():
+            del st.session_state[key]
+        st.rerun() # 画面を再読み込みして初期化
+
 # --- サイドバー：操作マニュアル ---
 with st.sidebar:
     st.header("📖 使い方マニュアル")
@@ -17,20 +25,19 @@ with st.sidebar:
     
     ### 2. 患者リストの準備
     右側の表に、割り振りたい患者を入力します。
-    * **CSVアップロード**: 電子カルテ等から書き出したCSVをドラッグ＆ドロップで一括取り込みできます。
+    * **CSVアップロード**: 電子カルテ等から書き出したCSVを一括取り込みできます。
     * **直接編集**: 名前やスコアを直接書き換えたり、コピペしたりできます。
     
     ### 3. 割り振りの実行
     中央の**「このデータで患者を割り振る」**ボタンを押してください。
     * **均等配分**: 新しく増える「大変さ」の合計が、医師間でなるべく同じになるよう自動計算します。
-    * **ランダム性**: ボタンを押すたびに組み合わせが変わります。
     
     ### 4. 結果の確認と保存
     * **個別患者の割り振り結果**: 入力順で担当医が表示されます。
     * **CSV保存**: 結果をExcelで開ける形式でダウンロードできます。
     """)
     st.divider()
-    st.caption("ver 1.1 - UI最適化版")
+    st.caption("ver 1.2 - エラー自動回避版")
 
 st.title("🏥 患者割り振りシミュレーター")
 st.write("各医師の現在の受け持ち人数と制限を考慮しつつ、新規患者の「大変さ」がなるべく均等になるように割り振ります。")
@@ -66,7 +73,6 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("👨‍⚕️ 割り振り前の医師ステータス")
-    # カラム名変更に合わせて計算式を修正
     total_current = st.session_state.doctors_df["現患者数"].sum()
     total_new = len(st.session_state.patients_df)
     doc_count = len(st.session_state.doctors_df)
@@ -122,7 +128,6 @@ if st.button("このデータで患者を割り振る", type="primary"):
     sorted_patients = sorted(patients_for_allocation, key=lambda x: x["大変さスコア"], reverse=True)
 
     for p in sorted_patients:
-        # 修正後のカラム名を使用して条件判定
         eligible_docs = [
             d for d in doctors 
             if d["現患者数"] < d["割振後max患者数"] and p["大変さスコア"] <= d["大変さのmaxスコア"]
