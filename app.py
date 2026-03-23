@@ -61,9 +61,7 @@ with col2:
     
     uploaded_file = st.file_uploader("電子カルテ等から患者リスト(CSV)を読み込む", type=["csv"])
     
-    # --- 修正ポイント：同じファイルで何度もリセットされるのを防ぐ ---
     if uploaded_file is not None:
-        # アップロードされたファイルのIDをチェックし、新しいファイルが来た時だけ読み込む
         if st.session_state.get("last_uploaded_file_id") != uploaded_file.file_id:
             try:
                 try:
@@ -78,7 +76,6 @@ with col2:
                     if "patient_editor" in st.session_state:
                         del st.session_state["patient_editor"]
                     
-                    # 読み込んだファイルのIDを記録する
                     st.session_state["last_uploaded_file_id"] = uploaded_file.file_id
                     
                     st.success("CSVを読み込みました！下の表に反映されています。")
@@ -115,7 +112,13 @@ if st.button("このデータで患者を割り振る", type="primary"):
     for doc in doctors:
         doc["新規追加スコア合計"] = 0
 
-    sorted_patients = sorted(valid_patients, key=lambda x: x["大変さスコア"], reverse=True)
+    # --- 修正ポイント：ランダム性の導入 ---
+    # 元の入力順を崩さないようにコピーを作成してからシャッフルする
+    patients_for_allocation = list(valid_patients)
+    random.shuffle(patients_for_allocation) 
+    
+    # シャッフルした後にスコア順で並び替える（同じスコアの患者はランダムな順序になる）
+    sorted_patients = sorted(patients_for_allocation, key=lambda x: x["大変さスコア"], reverse=True)
 
     for p in sorted_patients:
         eligible_docs = [
@@ -127,6 +130,8 @@ if st.button("このデータで患者を割り振る", type="primary"):
             unallocated.append(p)
             continue
 
+        # 同条件の医師が複数いた場合にランダムに選ばれるよう、医師リストもシャッフルする
+        random.shuffle(eligible_docs)
         best_doc = min(eligible_docs, key=lambda d: (d["新規追加スコア合計"], d["現在の患者数"]))
 
         best_doc["現在の患者数"] += 1
@@ -178,6 +183,7 @@ if st.button("このデータで患者を割り振る", type="primary"):
     for p in unallocated:
         patient_to_doc[p['名前']] = "⚠️ 未割り当て"
 
+    # valid_patients はシャッフルされていないため、元の入力順のまま出力される
     final_patient_list = []
     for p in valid_patients:
         final_patient_list.append({
