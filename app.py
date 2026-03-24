@@ -100,16 +100,35 @@ with col2:
 # --- 3. 割り振りアルゴリズム実行 ---
 st.divider()
 
+# 文字列を安全に数値に変換する関数
+def safe_int(val, default=0):
+    try:
+        return int(float(val))
+    except (ValueError, TypeError):
+        return default
+
 if st.button("このデータで患者を割り振る", type="primary", use_container_width=True):
     doctors = edited_doctors_df.to_dict('records')
     patients = edited_patients_df.to_dict('records')
+    
     allocations = {doc["名前"]: [] for doc in doctors}
     unallocated = []
-    valid_patients = [p for p in patients if not (pd.isna(p.get("名前")) or pd.isna(p.get("大変さスコア")))]
-    valid_patients_count = len(valid_patients)
-
+    
+    # 医師データの数値化（安全装置）
     for doc in doctors:
+        doc["現患者数"] = safe_int(doc.get("現患者数", 0))
+        doc["割振後max患者数"] = safe_int(doc.get("割振後max患者数", 0))
+        doc["大変さのmaxスコア"] = safe_int(doc.get("大変さのmaxスコア", 0))
         doc["新規追加スコア合計"] = 0
+
+    # 患者データの抽出と数値化（安全装置）
+    valid_patients = []
+    for p in patients:
+        if not (pd.isna(p.get("名前")) or pd.isna(p.get("大変さスコア")) or str(p.get("大変さスコア")).strip() == ""):
+            p["大変さスコア"] = safe_int(p.get("大変さスコア"), 1)
+            valid_patients.append(p)
+            
+    valid_patients_count = len(valid_patients)
 
     patients_for_allocation = list(valid_patients)
     random.shuffle(patients_for_allocation) 
